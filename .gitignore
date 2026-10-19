@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+
+# Streamlit configuración local
+.streamlit/secrets.toml
+
+# Base de datos local (opcional si no quieres subir cambios locales previos)
+# inventario_antigravity.db
