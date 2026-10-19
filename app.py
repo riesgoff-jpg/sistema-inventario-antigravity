@@ -4,58 +4,64 @@ import pandas as pd
 import streamlit as st
 
 # ==============================================================================
-# CONFIGURACIÓN DE PÁGINA (ANTIGRAVITY NATIVE INVENTORY SYSTEM)
+# CONFIGURACIÓN DE PÁGINA (SIX - DEPÓSITO Y TIENDA)
 # ==============================================================================
 st.set_page_config(
-    page_title="Sistema de Inventario - Antigravity",
-    page_icon="📦",
+    page_title="Six - Control de Inventario y Ventas",
+    page_icon="🍺",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Estilos CSS personalizados para una interfaz moderna, limpia y responsive
+# Estilos CSS adaptados para temática de Tienda/Depósito Six
 st.markdown(
     """
     <style>
-    /* Estilo general */
-    .main-title {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #1E293B;
-        margin-bottom: 0.2rem;
-    }
-    .main-subtitle {
-        font-size: 0.95rem;
-        color: #64748B;
+    .six-header {
+        background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+        padding: 1.2rem 1.6rem;
+        border-radius: 14px;
+        color: white;
         margin-bottom: 1.5rem;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
     }
-    /* Tarjetas de métricas */
+    .six-header h1 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: white;
+    }
+    .six-header p {
+        margin: 0.2rem 0 0 0;
+        font-size: 0.95rem;
+        color: #FEE2E2;
+    }
+    
     div[data-testid="stMetric"] {
-        background-color: rgba(59, 130, 246, 0.05);
-        border: 1px solid rgba(59, 130, 246, 0.15);
+        background-color: rgba(220, 38, 38, 0.04);
+        border: 1px solid rgba(220, 38, 38, 0.15);
         border-radius: 12px;
-        padding: 12px 16px;
+        padding: 10px 14px;
     }
     div[data-testid="stMetricValue"] {
         font-weight: 800;
-        color: #1E3A8A;
+        color: #991B1B;
     }
-    /* Workflow Banner */
-    .workflow-badge {
-        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-block;
-    }
-    .workflow-box {
-        background-color: #F8FAFC;
-        border-left: 4px solid #3B82F6;
-        padding: 12px 16px;
+    
+    .workflow-info {
+        background-color: #FEF2F2;
+        border-left: 4px solid #DC2626;
+        padding: 12px 14px;
         border-radius: 0 8px 8px 0;
+        font-size: 0.88rem;
         margin-bottom: 1rem;
+        color: #7F1D1D;
+    }
+
+    button[kind="primary"] {
+        background-color: #DC2626 !important;
+        border-color: #DC2626 !important;
+        font-weight: 700 !important;
     }
     </style>
     """,
@@ -66,12 +72,13 @@ DB_PATH = "inventario_antigravity.db"
 
 # ==============================================================================
 # BASE DE DATOS (SQLite)
-# Campos especificados:
-# - descripción del artículo (descripcion)
-# - precio del artículo (precio)
-# - cantidad de inventario (cantidad_inventario)
-# - cantidad que se vende (cantidad_vendida)
-# - fecha de venta (fecha_venta)
+# Base limpia: No contiene productos precargados; el cliente ingresa su catálogo.
+# Campos:
+# - descripcion: descripción del artículo
+# - precio: precio del artículo
+# - cantidad_inventario: cantidad de inventario
+# - cantidad_vendida: cantidad que se vende
+# - fecha_venta: fecha de venta
 # ==============================================================================
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -82,7 +89,7 @@ def init_db():
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Tabla del Catálogo de Artículos
+        # Tabla del Catálogo de Artículos (inicia 100% limpia)
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS articulos (
@@ -113,31 +120,24 @@ def init_db():
             );
             """
         )
-        
-        # Población inicial de prueba si la base de datos está vacía
-        cursor.execute("SELECT COUNT(*) FROM articulos")
-        if cursor.fetchone()[0] == 0:
-            demo_items = [
-                ("Laptop Ultra Slim 14'' Core i7", 12500.00, 15),
-                ("Mouse Inalámbrico Ergonómico", 350.50, 40),
-                ("Teclado Mecánico RGB Switch Blue", 890.00, 22),
-                ("Monitor Curvo 27'' FHD 165Hz", 3800.00, 8),
-                ("Cable USB-C de Carga Rápida 2m", 120.00, 50),
-            ]
-            cursor.executemany(
-                "INSERT INTO articulos (descripcion, precio, cantidad_inventario) VALUES (?, ?, ?)",
-                demo_items,
-            )
-        
         conn.commit()
 
 init_db()
 
 # ==============================================================================
-# OPERACIONES Y FLUJO DE TRABAJO (ANTIGRAVITY WORKFLOW)
+# OPERACIONES DE GESTIÓN Y EDICIÓN DEL INVENTARIO
 # ==============================================================================
+def obtener_articulos():
+    """Recupera todos los artículos registrados por el usuario."""
+    with get_connection() as conn:
+        df = pd.read_sql_query(
+            "SELECT id, descripcion, precio, cantidad_inventario, fecha_creacion FROM articulos ORDER BY descripcion ASC",
+            conn,
+        )
+        return df
+
 def agregar_articulo(descripcion: str, precio: float, cantidad_inventario: int):
-    """Registra un nuevo artículo en el catálogo de inventario."""
+    """Agrega un nuevo artículo al catálogo del Six."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -146,57 +146,76 @@ def agregar_articulo(descripcion: str, precio: float, cantidad_inventario: int):
         )
         conn.commit()
 
-def obtener_articulos():
-    """Recupera todos los artículos del catálogo con su stock actual."""
+def actualizar_articulo(articulo_id: int, nueva_descripcion: str, nuevo_precio: float, nuevo_stock: int):
+    """Actualiza la descripción, el precio o el inventario de un artículo existente."""
     with get_connection() as conn:
-        df = pd.read_sql_query(
-            "SELECT id, descripcion, precio, cantidad_inventario, fecha_creacion FROM articulos ORDER BY id DESC",
-            conn,
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE articulos 
+            SET descripcion = ?, precio = ?, cantidad_inventario = ? 
+            WHERE id = ?
+            """,
+            (nueva_descripcion.strip(), round(nuevo_precio, 2), int(nuevo_stock), articulo_id),
         )
-        return df
+        conn.commit()
 
+def eliminar_articulo(articulo_id: int):
+    """Elimina un artículo del inventario."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM articulos WHERE id = ?", (articulo_id,))
+        conn.commit()
+
+def vaciar_inventario():
+    """Limpia todo el inventario si el usuario desea reiniciar desde cero."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM articulos")
+        cursor.execute("DELETE FROM ventas")
+        conn.commit()
+
+# ==============================================================================
+# FLUJO DE TRABAJO (ANTIGRAVITY WORKFLOW: SALIDAS Y RESTA AUTOMÁTICA)
+# ==============================================================================
 def ejecutar_workflow_salida(articulo_id: int, cantidad_vendida: int, fecha_venta: date):
     """
-    FLUJO DE TRABAJO EN ANTIGRAVITY:
-    1. Verifica que el artículo exista y tenga stock suficiente.
-    2. Resta automáticamente la 'cantidad_vendida' de la 'cantidad_inventario' actual.
-    3. Registra la salida en la base de datos con la 'fecha_venta'.
-    4. Garantiza atomicidad transaccional.
+    FLUJO DE TRABAJO AUTOMÁTICO EN ANTIGRAVITY:
+    1. Verifica existencia de stock en el Six.
+    2. Resta automáticamente: cantidad_inventario = cantidad_inventario - cantidad_vendida
+    3. Registra la salida con la fecha de venta.
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Paso 1: Consultar stock actual
         cursor.execute(
             "SELECT descripcion, precio, cantidad_inventario FROM articulos WHERE id = ?",
             (articulo_id,),
         )
         item = cursor.fetchone()
         if not item:
-            return False, "❌ Error: El artículo seleccionado no existe."
+            return False, "❌ El producto seleccionado no existe."
             
         descripcion, precio, stock_actual = item
         
-        # Paso 2: Validación de existencias
         if cantidad_vendida <= 0:
-            return False, "❌ Error: La cantidad que se vende debe ser mayor a 0."
+            return False, "❌ La cantidad que se vende debe ser mayor a 0."
             
         if cantidad_vendida > stock_actual:
             return (
                 False,
-                f"❌ Stock insuficiente: Solo hay {stock_actual} unidades disponibles de '{descripcion}'.",
+                f"❌ Stock insuficiente en el Six. Solo quedan {stock_actual} unidades de '{descripcion}'.",
             )
             
         nuevo_stock = stock_actual - cantidad_vendida
         total = round(precio * cantidad_vendida, 2)
         
-        # Paso 3: Resta automática del inventario (Workflow Action)
+        # Ejecución atómica de la resta y guardado de fecha
         cursor.execute(
             "UPDATE articulos SET cantidad_inventario = ? WHERE id = ?",
             (nuevo_stock, articulo_id),
         )
         
-        # Paso 4: Registro de la venta con fecha_venta
         cursor.execute(
             """
             INSERT INTO ventas (
@@ -228,20 +247,19 @@ def ejecutar_workflow_salida(articulo_id: int, cantidad_vendida: int, fecha_vent
         }
 
 def obtener_historial_ventas():
-    """Recupera el historial completo de salidas y ejecuciones del workflow."""
     with get_connection() as conn:
         df = pd.read_sql_query(
             """
             SELECT 
                 id AS 'Folio',
                 fecha_venta AS 'Fecha de Venta',
-                descripcion AS 'Descripción del Artículo',
+                descripcion AS 'Artículo / Producto',
                 precio AS 'Precio ($)',
                 cantidad_vendida AS 'Cant. Vendida',
                 stock_previo AS 'Stock Previo',
-                stock_resultante AS 'Stock Resultante',
+                stock_resultante AS 'Stock Actual',
                 total AS 'Total ($)',
-                timestamp AS 'Hora de Registro'
+                timestamp AS 'Hora'
             FROM ventas
             ORDER BY id DESC
             """,
@@ -250,102 +268,190 @@ def obtener_historial_ventas():
         return df
 
 # ==============================================================================
-# INTERFAZ DE USUARIO CON STREAMLIT
+# ENCABEZADO Y NAVEGACIÓN
 # ==============================================================================
-st.markdown('<div class="main-title">📦 Sistema de Inventario Nativo</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-subtitle">Control de inventario reactivo y automatización de flujo de trabajo en Antigravity</div>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="six-header">
+        <h1>🍺 Six - Control de Inventario & Punto de Venta</h1>
+        <p>Sistema nativo para tienda Six • Catálogo limpio listo para registrar tus productos</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# Barra lateral de navegación entre las dos vistas principales + auditoría
 with st.sidebar:
-    st.image("https://img.icons8.com/isometric/100/warehouse-1.png", width=80)
-    st.header("Navegación")
+    st.markdown("### 🏪 Menú del Six")
     vista_seleccionada = st.radio(
-        "Seleccione la vista:",
-        ["🏷️ Catálogo de Productos", "🛒 Punto de Venta", "📜 Historial de Salidas"],
+        "Ir a la vista:",
+        ["🏷️ Catálogo (Gestionar y Editar)", "🛒 Punto de Venta (Cobro)", "📜 Historial de Salidas"],
         index=0,
     )
     st.markdown("---")
     st.markdown(
         """
-        **Regla del Workflow:**
+        **⚡ Regla del Workflow:**
         - Al registrar una venta:
           `cantidad_inventario = cantidad_inventario - cantidad_vendida`
         - Guarda `fecha_venta`.
         """
     )
     st.markdown("---")
-    st.caption("⚡ Powered by Antigravity Agent Engine")
+    st.caption("🍺 Tienda Six • Antigravity Engine")
 
 # ==============================================================================
-# VISTA 1: CATÁLOGO PARA GESTIONAR PRODUCTOS
+# VISTA 1: CATÁLOGO DE PRODUCTOS (GESTIÓN Y EDICIÓN COMPLETA)
 # ==============================================================================
-if vista_seleccionada == "🏷️ Catálogo de Productos":
-    st.header("🏷️ Catálogo de Productos")
-    st.write("Gestiona la base de datos de artículos, precios e inventario disponible.")
+if vista_seleccionada == "🏷️ Catálogo (Gestionar y Editar)":
+    st.subheader("🏷️ Catálogo de Artículos del Six")
+    st.write("Agrega tus productos, edita precios, reabastece existencias y consulta tu inventario.")
 
-    # Formulario para registrar nuevo producto
-    with st.expander("➕ Registrar Nuevo Artículo en el Catálogo", expanded=False):
+    df_art = obtener_articulos()
+
+    # Si no hay productos, mostramos como primera pestaña "Agregar Producto"
+    tab_nuevo, tab_editar, tab_opciones = st.tabs([
+        "➕ Agregar Producto",
+        "✏️ Editar / Reabastecer Artículo",
+        "⚙️ Opciones"
+    ])
+
+    # ----------------------------------------------------
+    # TAB 1: AGREGAR NUEVO ARTÍCULO (Listo para el cliente)
+    # ----------------------------------------------------
+    with tab_nuevo:
+        st.write("Ingresa los datos del artículo para darlo de alta en tu inventario:")
         with st.form("form_alta_producto", clear_on_submit=True):
             col_d, col_p, col_c = st.columns([3, 2, 2])
             with col_d:
-                desc_input = st.text_input("Descripción del artículo *", placeholder="Ej: Monitor LED 24''")
+                desc_input = st.text_input("Descripción del artículo *", placeholder="Ej: Six Pack Tecate Light, Caguama Carta Blanca, Hielo 5kg...")
             with col_p:
-                precio_input = st.number_input("Precio del artículo ($) *", min_value=0.01, step=1.0, value=150.00, format="%.2f")
+                precio_input = st.number_input("Precio al público ($) *", min_value=0.01, step=1.0, value=25.00, format="%.2f")
             with col_c:
-                stock_input = st.number_input("Cantidad de inventario *", min_value=0, step=1, value=10)
+                stock_input = st.number_input("Cantidad de inventario inicial *", min_value=0, step=1, value=12)
             
-            submit_producto = st.form_submit_button("💾 Guardar Artículo en Catálogo")
+            submit_producto = st.form_submit_button("💾 Guardar Artículo en el Catálogo", type="primary", use_container_width=True)
             if submit_producto:
                 if not desc_input.strip():
                     st.error("Por favor ingresa una descripción para el artículo.")
                 else:
                     agregar_articulo(desc_input, precio_input, stock_input)
-                    st.success(f"✅ Artículo '{desc_input}' agregado correctamente con {stock_input} unidades a ${precio_input:,.2f}.")
+                    st.success(f"✅ ¡Artículo '{desc_input}' agregado exitosamente con {stock_input} unidades a ${precio_input:,.2f}!")
                     st.rerun()
 
-    # Métricas del Catálogo
-    df_art = obtener_articulos()
+    # ----------------------------------------------------
+    # TAB 2: EDITAR / REABASTECER ARTÍCULO EXISTENTE
+    # ----------------------------------------------------
+    with tab_editar:
+        if df_art.empty:
+            st.info("Aún no tienes artículos registrados. Agrega tus primeros productos en la pestaña **➕ Agregar Producto**.")
+        else:
+            dict_articulos = {
+                f"{row['descripcion']} (Stock: {row['cantidad_inventario']} | ${row['precio']:,.2f})": row["id"]
+                for _, row in df_art.iterrows()
+            }
+
+            articulo_a_editar_label = st.selectbox(
+                "Selecciona el artículo que deseas modificar o reabastecer:",
+                options=list(dict_articulos.keys()),
+                key="select_edit_item"
+            )
+            item_id = dict_articulos[articulo_a_editar_label]
+            item_data = df_art[df_art["id"] == item_id].iloc[0]
+
+            with st.form("form_editar_articulo"):
+                col_e1, col_e2, col_e3 = st.columns([3, 2, 2])
+                with col_e1:
+                    edit_desc = st.text_input("Descripción del artículo:", value=str(item_data["descripcion"]))
+                with col_e2:
+                    edit_precio = st.number_input(
+                        "Precio ($):", 
+                        min_value=0.01, 
+                        value=float(item_data["precio"]), 
+                        step=0.50, 
+                        format="%.2f"
+                    )
+                with col_e3:
+                    edit_stock = st.number_input(
+                        "Cantidad en inventario actual:", 
+                        min_value=0, 
+                        value=int(item_data["cantidad_inventario"]), 
+                        step=1
+                    )
+
+                st.caption("💡 Puedes cambiar el nombre, actualizar precios o sumar nuevo stock cuando llegue mercancía de tus distribuidores.")
+
+                c_save, c_del = st.columns([4, 1])
+                with c_save:
+                    btn_guardar_edicion = st.form_submit_button("💾 Guardar Cambios", type="primary", use_container_width=True)
+                with c_del:
+                    btn_eliminar = st.form_submit_button("🗑️ Eliminar", use_container_width=True)
+
+                if btn_guardar_edicion:
+                    if not edit_desc.strip():
+                        st.error("La descripción no puede estar vacía.")
+                    else:
+                        actualizar_articulo(item_id, edit_desc, edit_precio, edit_stock)
+                        st.success(f"✅ ¡Artículo '{edit_desc}' actualizado con éxito! Nuevo stock: {edit_stock} unid. | Precio: ${edit_precio:,.2f}")
+                        st.rerun()
+
+                if btn_eliminar:
+                    eliminar_articulo(item_id)
+                    st.warning(f"🗑️ Artículo '{item_data['descripcion']}' eliminado.")
+                    st.rerun()
+
+    # ----------------------------------------------------
+    # TAB 3: OPCIONES ADICIONALES
+    # ----------------------------------------------------
+    with tab_opciones:
+        st.write("Administración de datos:")
+        if st.button("🗑️ Vaciar todo el inventario"):
+            vaciar_inventario()
+            st.warning("Se ha vaciado el inventario.")
+            st.rerun()
+
+    st.markdown("---")
+
+    # Métricas Globales del Inventario
     total_articulos = len(df_art)
-    total_stock_unidades = int(df_art["cantidad_inventario"].sum()) if not df_art.empty else 0
+    total_unidades = int(df_art["cantidad_inventario"].sum()) if not df_art.empty else 0
     valor_inventario = (df_art["precio"] * df_art["cantidad_inventario"]).sum() if not df_art.empty else 0.0
 
     m1, m2, m3 = st.columns(3)
-    m1.metric("Total de Artículos", f"{total_articulos} productos")
-    m2.metric("Inventario en Stock", f"{total_stock_unidades} unidades")
-    m3.metric("Valor del Inventario", f"${valor_inventario:,.2f}")
+    m1.metric("📦 Variedad de Productos", f"{total_articulos} artículos")
+    m2.metric("🍺 Stock Total en Tienda", f"{total_unidades} unidades")
+    m3.metric("💰 Valor del Inventario", f"${valor_inventario:,.2f}")
 
-    st.markdown("### 📋 Artículos Registrados en el Sistema")
-
+    # Tabla con Buscador
+    st.markdown("### 📋 Lista de Inventario del Six")
+    
     if df_art.empty:
-        st.info("No hay productos registrados en el catálogo. Utiliza el formulario superior para añadir artículos.")
+        st.info("💡 **El inventario está listo y vacío.** Tu cliente puede comenzar a dar de alta sus productos en la pestaña superior **➕ Agregar Producto**.")
     else:
-        # Buscador en tiempo real
-        c_search, c_filter = st.columns([3, 1])
+        c_search, c_check = st.columns([3, 1])
         with c_search:
-            busqueda = st.text_input("🔍 Buscar artículo por descripción:", placeholder="Escribe para filtrar...")
-        with c_filter:
-            solo_stock_bajo = st.checkbox("⚠️ Ver solo stock bajo (≤ 5)", value=False)
+            filtro_txt = st.text_input("🔍 Buscar artículo por nombre:", placeholder="Escribe para buscar...")
+        with c_check:
+            solo_bajo = st.checkbox("⚠️ Ver solo stock bajo (≤ 5 unid.)", value=False)
 
-        df_filtrado = df_art.copy()
-        if busqueda:
-            df_filtrado = df_filtrado[df_filtrado["descripcion"].str.contains(busqueda, case=False, na=False)]
-        if solo_stock_bajo:
-            df_filtrado = df_filtrado[df_filtrado["cantidad_inventario"] <= 5]
+        df_mostrar = df_art.copy()
+        if filtro_txt:
+            df_mostrar = df_mostrar[df_mostrar["descripcion"].str.contains(filtro_txt, case=False, na=False)]
+        if solo_bajo:
+            df_mostrar = df_mostrar[df_mostrar["cantidad_inventario"] <= 5]
 
-        # Presentación en tabla amigable
-        df_display = df_filtrado.rename(
+        df_presentacion = df_mostrar.rename(
             columns={
                 "id": "ID",
                 "descripcion": "Descripción del Artículo",
-                "precio": "Precio del Artículo ($)",
+                "precio": "Precio al Público ($)",
                 "cantidad_inventario": "Cantidad de Inventario",
-                "fecha_creacion": "Fecha de Registro",
+                "fecha_creacion": "Fecha de Alta",
             }
         )
 
         st.dataframe(
-            df_display.style.format({
-                "Precio del Artículo ($)": "${:,.2f}",
+            df_presentacion.style.format({
+                "Precio al Público ($)": "${:,.2f}",
                 "Cantidad de Inventario": "{:d} unid."
             }),
             use_container_width=True,
@@ -355,43 +461,44 @@ if vista_seleccionada == "🏷️ Catálogo de Productos":
 # ==============================================================================
 # VISTA 2: PUNTO DE VENTA (REGISTRO DE SALIDAS Y FLUJO DE TRABAJO)
 # ==============================================================================
-elif vista_seleccionada == "🛒 Punto de Venta":
-    st.header("🛒 Punto de Venta")
-    st.write("Registra salidas y ventas de mercancía. El workflow deducirá automáticamente el stock y guardará la fecha.")
+elif vista_seleccionada == "🛒 Punto de Venta (Cobro)":
+    st.subheader("🛒 Punto de Venta - Mostrador Six")
+    st.write("Registra salidas y ventas de producto. El flujo de trabajo restará automáticamente la mercancía y guardará la fecha.")
 
     df_art = obtener_articulos()
     disponibles = df_art[df_art["cantidad_inventario"] > 0]
 
-    if disponibles.empty:
-        st.warning("⚠️ No hay productos con inventario disponible para vender. Ingresa artículos o aumenta el stock en el **Catálogo**.")
+    if df_art.empty:
+        st.info("⚠️ Aún no has registrado ningún producto. Ve al **Catálogo** para agregar los artículos de tu Six.")
+    elif disponibles.empty:
+        st.warning("⚠️ Hay artículos registrados pero todos están agotados (stock 0). Reabastece inventario en el **Catálogo**.")
     else:
         col_form, col_ticket = st.columns([3, 2])
 
         with col_form:
             st.markdown(
                 """
-                <div class="workflow-box">
+                <div class="workflow-info">
                     <strong>⚙️ Flujo de Trabajo en Antigravity:</strong><br>
-                    Al presionar <em>'Registrar Salida / Venta'</em>, el sistema ejecuta la resta automática:
-                    <code>Inventario Final = Inventario Actual - Cantidad que se vende</code>
-                    y almacena de forma inmutable la <strong>Fecha de Venta</strong>.
+                    Al presionar <em>'Confirmar Venta'</em>, se descuenta el stock de manera atómica:
+                    <br><code>Inventario Final = Inventario Actual - Cantidad que se vende</code>
+                    <br>y se registra la <strong>Fecha de Venta</strong> en el libro de transacciones.
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-            # Diccionario de opciones para selector
             dict_opciones = {
                 f"{row['descripcion']} (Stock: {row['cantidad_inventario']} | ${row['precio']:,.2f})": row["id"]
                 for _, row in disponibles.iterrows()
             }
 
-            with st.form("form_punto_de_venta"):
-                item_seleccionado_label = st.selectbox(
-                    "Selecciona el artículo a vender *",
+            with st.form("form_pos_six"):
+                item_label = st.selectbox(
+                    "Selecciona el producto a despachar *",
                     options=list(dict_opciones.keys()),
                 )
-                articulo_id = dict_opciones[item_seleccionado_label]
+                articulo_id = dict_opciones[item_label]
                 item_row = disponibles[disponibles["id"] == articulo_id].iloc[0]
 
                 stock_maximo = int(item_row["cantidad_inventario"])
@@ -413,17 +520,17 @@ elif vista_seleccionada == "🛒 Punto de Venta":
                         value=date.today(),
                     )
 
-                btn_registrar_salida = st.form_submit_button("⚡ Registrar Salida / Venta", type="primary", use_container_width=True)
+                btn_vender = st.form_submit_button("⚡ Confirmar Venta y Restar del Inventario", type="primary", use_container_width=True)
 
-                if btn_registrar_salida:
+                if btn_vender:
                     exito, detalle = ejecutar_workflow_salida(articulo_id, cant_vender, fecha_sel)
                     if exito:
                         st.success(
-                            f"✅ **¡Venta y Salida Registrada Exitosamente!**  \n"
-                            f"• **Artículo:** {detalle['descripcion']}  \n"
-                            f"• **Cantidad vendida:** {detalle['cantidad_vendida']} unid.  \n"
-                            f"• **Stock:** {detalle['stock_previo']} → **{detalle['nuevo_stock']}**  \n"
-                            f"• **Fecha de venta:** {detalle['fecha_venta']}  \n"
+                            f"✅ **¡Venta Registrada Exitosamente!**  \n"
+                            f"• **Producto:** {detalle['descripcion']}  \n"
+                            f"• **Salida:** -{detalle['cantidad_vendida']} unidades  \n"
+                            f"• **Stock:** {detalle['stock_previo']} → **{detalle['nuevo_stock']} unidades**  \n"
+                            f"• **Fecha guardada:** {detalle['fecha_venta']}  \n"
                             f"• **Total cobrado:** ${detalle['total']:,.2f}"
                         )
                         st.balloons()
@@ -432,44 +539,44 @@ elif vista_seleccionada == "🛒 Punto de Venta":
                         st.error(detalle)
 
         with col_ticket:
-            st.markdown("### 🧾 Resumen de la Operación")
-            subtotal_estimado = cant_vender * precio_unitario
-            stock_remanente = stock_maximo - cant_vender
+            st.markdown("### 🧾 Ticket de Cobro")
+            subtotal = cant_vender * precio_unitario
+            stock_queda = stock_maximo - cant_vender
 
             st.markdown(
                 f"""
-                - **Artículo seleccionado:** `{descripcion_sel}`
+                - **Producto:** `{descripcion_sel}`
                 - **Precio unitario:** `${precio_unitario:,.2f}`
-                - **Stock en inventario:** `{stock_maximo}` unid.
-                - **Cantidad a descontar:** `{cant_vender}` unid.
-                - **Stock proyectado tras la salida:** **`{stock_remanente}`** unid.
-                - **Fecha asignada:** `{fecha_sel}`
+                - **Stock actual:** `{stock_maximo}` unid.
+                - **Cantidad a vender:** `{cant_vender}` unid.
+                - **Quedarán en bodega:** **`{stock_queda}`** unid.
+                - **Fecha de operación:** `{fecha_sel}`
                 ---
-                ### Total a Liquidar:
-                # `${subtotal_estimado:,.2f}`
+                ### Total a Cobrar:
+                # `${subtotal:,.2f}`
                 """
             )
 
 # ==============================================================================
-# VISTA 3: AUDITORÍA Y HISTORIAL DE SALIDAS (LOGS DEL WORKFLOW)
+# VISTA 3: HISTORIAL DE SALIDAS Y AUDITORÍA
 # ==============================================================================
 elif vista_seleccionada == "📜 Historial de Salidas":
-    st.header("📜 Historial de Salidas & Ejecución de Workflows")
-    st.write("Registro transaccional de todas las salidas efectuadas con fecha y deducciones automáticas.")
+    st.subheader("📜 Historial de Salidas del Six")
+    st.write("Auditoría de todas las ventas realizadas, fechas registradas y stock deducido.")
 
     df_historial = obtener_historial_ventas()
 
     if df_historial.empty:
-        st.info("Aún no se han registrado salidas en el sistema.")
+        st.info("Aún no se han registrado ventas en el sistema.")
     else:
         total_acumulado = df_historial["Total ($)"].sum()
         total_unidades = int(df_historial["Cant. Vendida"].sum())
         total_transacciones = len(df_historial)
 
         c1, c2, c3 = st.columns(3)
-        c1.metric("Ventas Acumuladas", f"${total_acumulado:,.2f}")
-        c2.metric("Unidades Despachadas", f"{total_unidades} unid.")
-        c3.metric("Transacciones Ejecutadas", f"{total_transacciones}")
+        c1.metric("💵 Total Vendido en Caja", f"${total_acumulado:,.2f}")
+        c2.metric("🛍️ Unidades Despachadas", f"{total_unidades} unid.")
+        c3.metric("📝 Ventas Registradas", f"{total_transacciones}")
 
         st.dataframe(
             df_historial.style.format({
@@ -477,7 +584,7 @@ elif vista_seleccionada == "📜 Historial de Salidas":
                 "Total ($)": "${:,.2f}",
                 "Cant. Vendida": "{:d} unid.",
                 "Stock Previo": "{:d}",
-                "Stock Resultante": "{:d}",
+                "Stock Actual": "{:d}",
             }),
             use_container_width=True,
             hide_index=True,
